@@ -57,7 +57,7 @@ func ChatCommand(config config.Config) *cobra.Command {
 				text, _ := reader.ReadString('\n')
 				text = strings.TrimSpace(text)
 
-				fmt.Printf("Debug: Received input: %s\n", text) // Debug print
+				// fmt.Printf("Debug: Received input: %s\n", text) // Debug print
 
 				if text == "exit" {
 					break
@@ -139,11 +139,11 @@ func ChatCommand(config config.Config) *cobra.Command {
 						saveFullConversation(conversation)
 						continue
 					case strings.Contains(text, "/save"):
-						fmt.Println("调试: 正在尝试保存最后一次回复...") // 调试信息
+						// fmt.Println("调试: 正在尝试保存最后一次回复...") // 调试信息
 						saveLastResponse(conversation)
 						continue
 					default:
-						fmt.Printf("未知命令: %s\n", text) // Debug print
+						// fmt.Printf("未知命令: %s\n", text) // Debug print
 						continue
 					}
 				}
@@ -255,7 +255,7 @@ func saveLastResponse(conversation []struct {
 	}
 
 	fmt.Printf("已保存最后一次AI回复到 %s\n", fileName)
-	fmt.Printf("调试信息: 文件路径 - %s\n", fileName) // Debug print
+	// fmt.Printf("调试信息: 文件路径 - %s\n", fileName) // Debug print
 }
 
 // Function to save the full conversation
@@ -286,5 +286,5 @@ func saveFullConversation(conversation []struct {
 	}
 
 	fmt.Printf("已保存完整对话到 %s\n", fileName)
-	fmt.Printf("调试信息: 文件路径 - %s\n", fileName) // Debug print
+	// fmt.Printf("调试信息: 文件路径 - %s\n", fileName) // Debug print
 }
