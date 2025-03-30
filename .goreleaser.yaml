@@ -1,4 +1,6 @@
 # .goreleaser.yaml
+version: 2
+
 builds:
   - id: ask-binary
     binary: ask
@@ -11,12 +13,14 @@ builds:
       - amd64
       - arm64
     goversion: '1.24.1' # Specify Go version in build settings
+
 release:
   github:
     owner: '{{ .Env.GITHUB_REPOSITORY_OWNER }}'
     name: '{{ .Env.GITHUB_REPOSITORY }}'
   name_template: 'v{{ .Version }}'
   prerelease: auto
+
 changelog:
   sort: asc
   filters:
