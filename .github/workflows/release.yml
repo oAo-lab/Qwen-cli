@@ -28,5 +28,5 @@ jobs:
         uses: goreleaser/goreleaser-action@v3
         id: goreleaser
         with:
-          version: latest
-          args: release
+          version: v3.10.0 # Or another recent v3 version
+          args: release --rm-dist
