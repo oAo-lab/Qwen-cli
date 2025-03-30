@@ -1,0 +1,29 @@
+# .goreleaser.yaml
+builds:
+  - id: ask-binary
+    binary: ask
+    main: ./cmd/main.go
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goversion: '1.24.1' # Specify Go version in build settings
+release:
+  github:
+    owner: '{{ .Env.GITHUB_REPOSITORY_OWNER }}'
+    name: '{{ .Env.GITHUB_REPOSITORY }}'
+  name_template: 'v{{ .Version }}'
+  prerelease: auto
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^test:'
+      - '^ci:'
+      - '^docs:'
+      - '^chore:'
+      - '^refactor:'
+      - '^style:'
