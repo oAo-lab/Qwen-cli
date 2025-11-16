@@ -111,6 +111,10 @@ func performForceUpdate() {
 	currentVersion := version.GetVersion()
 	fmt.Printf("📋 当前版本: %s\n", currentVersion)
 	fmt.Printf("🎯 目标版本: %s\n", release.TagName)
+	fmt.Printf("🔍 发布信息调试:\n")
+	fmt.Printf("  - TagName: '%s'\n", release.TagName)
+	fmt.Printf("  - Name: '%s'\n", release.Name)
+	fmt.Printf("  - Assets 数量: %d\n", len(release.Assets))
 
 	if currentVersion == release.TagName {
 		fmt.Println("ℹ️  当前版本已是最新，但将强制重新安装...")
@@ -122,8 +126,12 @@ func performForceUpdate() {
 		fmt.Println("❌ 无法找到适合您系统的下载文件")
 		fmt.Printf("🔍 调试信息: 系统=%s, 架构=%s\n", runtime.GOOS, runtime.GOARCH)
 		fmt.Printf("🔍 可用资源文件:\n")
-		for i, asset := range release.Assets {
-			fmt.Printf("  %d. %s\n", i+1, asset.Name)
+		if len(release.Assets) == 0 {
+			fmt.Printf("  (无资源文件)\n")
+		} else {
+			for i, asset := range release.Assets {
+				fmt.Printf("  %d. %s (URL: %s)\n", i+1, asset.Name, asset.URL)
+			}
 		}
 		return
 	}

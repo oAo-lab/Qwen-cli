@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/signal"
@@ -49,7 +50,8 @@ func main() {
 	go func() {
 		for range signalChan {
 			fmt.Println("\n对话已暂停，按回车键继续...")
-			fmt.Scanln()
+			// 使用 bufio.Reader 读取单个回车即可继续，不需要输入内容
+			bufio.NewReader(os.Stdin).ReadString('\n')
 		}
 	}()
 

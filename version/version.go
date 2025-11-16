@@ -91,10 +91,10 @@ func isNewerVersion(newVersion, currentVersion string) bool {
 		var newNum, currentNum int
 
 		if i < len(newParts) {
-			fmt.Sscanf(newParts[i], "%d", &newNum)
+			_, _ = fmt.Sscanf(newParts[i], "%d", &newNum)
 		}
 		if i < len(currentParts) {
-			fmt.Sscanf(currentParts[i], "%d", &currentNum)
+			_, _ = fmt.Sscanf(currentParts[i], "%d", &currentNum)
 		}
 
 		if newNum > currentNum {
@@ -112,43 +112,38 @@ func GetDownloadURL(release *ReleaseInfo) string {
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 
-	// 所有平台都优先尝试直接下载可执行文件
-	var pattern string
-	switch osName {
-	case "windows":
-		if arch == "arm64" {
-			pattern = "ask_"
-		} else {
-			pattern = "ask_"
-		}
-	case "darwin":
-		if arch == "arm64" {
-			pattern = "ask_"
-		} else {
-			pattern = "ask_"
-		}
-	case "linux":
-		if arch == "arm64" {
-			pattern = "ask_"
-		} else {
-			pattern = "ask_"
-		}
-	default:
-		return ""
+	fmt.Printf("🔍 查找下载URL: 系统=%s, 架构=%s\n", osName, arch)
+	fmt.Printf("🔍 总共有 %d 个资源文件\n", len(release.Assets))
+
+	// 构建期望的文件名模式
+	var expectedPattern string
+	if osName == "windows" {
+		expectedPattern = fmt.Sprintf("ask_.*_%s_%s.exe", osName, arch)
+	} else {
+		expectedPattern = fmt.Sprintf("ask_.*_%s_%s", osName, arch)
 	}
 
+	fmt.Printf("🎯 期望的文件名模式: %s\n", expectedPattern)
+
 	// 查找匹配的资源文件
-	for _, asset := range release.Assets {
-		// 所有平台都优先查找直接的可执行文件
-		if strings.Contains(asset.Name, "ask_") && strings.Contains(asset.Name, "_"+osName+"_") {
+	for i, asset := range release.Assets {
+		fmt.Printf("🔍 [%d] 检查文件: %s\n", i+1, asset.Name)
+
+		// 使用更精确的匹配逻辑
+		if strings.Contains(asset.Name, "ask_") &&
+			strings.Contains(asset.Name, "_"+osName+"_") &&
+			strings.Contains(asset.Name, "_"+arch) {
+
 			// Windows 检查 .exe 后缀，其他平台检查无后缀或对应后缀
 			if osName == "windows" {
 				if strings.HasSuffix(asset.Name, ".exe") {
+					fmt.Printf("✅ 找到匹配的 Windows 文件: %s\n", asset.Name)
 					return asset.URL
 				}
 			} else {
 				// macOS 和 Linux 的可执行文件通常没有后缀
-				if !strings.Contains(asset.Name, ".") {
+				if !strings.Contains(asset.Name, ".tar.gz") && !strings.Contains(asset.Name, ".zip") {
+					fmt.Printf("✅ 找到匹配的 Unix 文件: %s\n", asset.Name)
 					return asset.URL
 				}
 			}
@@ -156,33 +151,27 @@ func GetDownloadURL(release *ReleaseInfo) string {
 	}
 
 	// 如果没找到直接的可执行文件，回退到压缩包
+	fmt.Printf("⚠️ 未找到直接可执行文件，尝试压缩包...\n")
+	var archivePattern string
 	switch osName {
 	case "windows":
-		if arch == "arm64" {
-			pattern = "_windows_arm64.tar.gz"
-		} else {
-			pattern = "_windows_amd64.tar.gz"
-		}
+		archivePattern = fmt.Sprintf("_%s_%s.tar.gz", osName, arch)
 	case "darwin":
-		if arch == "arm64" {
-			pattern = "_darwin_arm64.tar.gz"
-		} else {
-			pattern = "_darwin_amd64.tar.gz"
-		}
+		archivePattern = fmt.Sprintf("_%s_%s.tar.gz", osName, arch)
 	case "linux":
-		if arch == "arm64" {
-			pattern = "_linux_arm64.tar.gz"
-		} else {
-			pattern = "_linux_amd64.tar.gz"
-		}
+		archivePattern = fmt.Sprintf("_%s_%s.tar.gz", osName, arch)
 	}
 
+	fmt.Printf("🎯 压缩包模式: %s\n", archivePattern)
+
 	for _, asset := range release.Assets {
-		if strings.Contains(asset.Name, pattern) {
+		if strings.Contains(asset.Name, archivePattern) {
+			fmt.Printf("✅ 找到匹配的压缩包: %s\n", asset.Name)
 			return asset.URL
 		}
 	}
 
+	fmt.Printf("❌ 未找到任何匹配的文件\n")
 	return ""
 }
 
@@ -223,15 +212,21 @@ func downloadAndInstallBinary(url, execPath string) error {
 	if err != nil {
 		return fmt.Errorf("创建临时文件失败: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
+	defer func() {
+		_ = tmpFile.Close()
+	}()
 
 	// 下载文件
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("下载失败: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("下载失败，状态码: %d", resp.StatusCode)
@@ -259,7 +254,7 @@ func downloadAndInstallBinary(url, execPath string) error {
 		err = os.Rename(tmpFile.Name(), execPath)
 		if err != nil {
 			// 如果失败，恢复备份
-			os.Rename(backupPath, execPath)
+			_ = os.Rename(backupPath, execPath)
 			return fmt.Errorf("替换文件失败: %v", err)
 		}
 
@@ -270,7 +265,7 @@ func downloadAndInstallBinary(url, execPath string) error {
 		}
 
 		// 删除备份文件
-		os.Remove(backupPath)
+		_ = os.Remove(backupPath)
 
 		fmt.Println("✅ 更新完成！")
 		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
@@ -288,15 +283,21 @@ func downloadAndInstallArchive(url, execPath string) error {
 	if err != nil {
 		return fmt.Errorf("创建临时文件失败: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
+	defer func() {
+		_ = tmpFile.Close()
+	}()
 
 	// 下载文件
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("下载失败: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("下载失败，状态码: %d", resp.StatusCode)
@@ -318,7 +319,9 @@ func downloadAndInstallArchive(url, execPath string) error {
 		if err != nil {
 			return fmt.Errorf("创建临时目录失败: %v", err)
 		}
-		defer os.RemoveAll(tmpDir)
+		defer func() {
+			_ = os.RemoveAll(tmpDir)
+		}()
 
 		// 解压文件
 		err = extractTarGz(tmpFile.Name(), tmpDir)
@@ -345,7 +348,8 @@ func downloadAndInstallArchive(url, execPath string) error {
 		}
 
 		// 使用外部更新器程序
-		return downloadAndInstallWithUpdater("", execPath, binaryPath)
+		_ = downloadAndInstallWithUpdater("", execPath, binaryPath)
+		return nil
 	}
 
 	// 在Unix系统上，自动解压并替换文件
@@ -356,7 +360,9 @@ func downloadAndInstallArchive(url, execPath string) error {
 	if err != nil {
 		return fmt.Errorf("创建临时目录失败: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	// 解压文件
 	err = extractTarGz(tmpFile.Name(), tmpDir)
@@ -393,7 +399,7 @@ func downloadAndInstallArchive(url, execPath string) error {
 	err = os.Rename(binaryPath, execPath)
 	if err != nil {
 		// 如果失败，恢复备份
-		os.Rename(backupPath, execPath)
+		_ = os.Rename(backupPath, execPath)
 		return fmt.Errorf("替换文件失败: %v", err)
 	}
 
@@ -404,7 +410,7 @@ func downloadAndInstallArchive(url, execPath string) error {
 	}
 
 	// 删除备份文件
-	os.Remove(backupPath)
+	_ = os.Remove(backupPath)
 
 	fmt.Println("✅ 更新完成！")
 	fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
@@ -423,7 +429,9 @@ func downloadAndInstallWithUpdater(url, execPath, newBinaryPath string) error {
 		if err != nil {
 			return fmt.Errorf("下载失败: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("下载失败，状态码: %d", resp.StatusCode)
@@ -434,7 +442,9 @@ func downloadAndInstallWithUpdater(url, execPath, newBinaryPath string) error {
 		if err != nil {
 			return fmt.Errorf("创建临时文件失败: %v", err)
 		}
-		defer tmpFile.Close()
+		defer func() {
+			_ = tmpFile.Close()
+		}()
 
 		// 写入下载内容
 		_, err = io.Copy(tmpFile, resp.Body)
@@ -519,7 +529,9 @@ func downloadUpdater() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("下载更新器失败: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("下载更新器失败，状态码: %d，URL: %s", resp.StatusCode, updaterURL)
@@ -530,7 +542,9 @@ func downloadUpdater() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("创建更新器文件失败: %v", err)
 	}
-	defer out.Close()
+	defer func() {
+		_ = out.Close()
+	}()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
@@ -549,23 +563,111 @@ func downloadUpdater() (string, error) {
 
 // getLatestRelease 获取最新发布信息
 func getLatestRelease() (*ReleaseInfo, error) {
-	resp, err := http.Get("https://api.github.com/repos/oAo-lab/Qwen-cli/releases/latest")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	url := "https://api.github.com/repos/oAo-lab/Qwen-cli/releases/latest"
+	fmt.Printf("🔍 正在请求: %s\n", url)
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	// 添加重试机制处理速率限制
+	maxRetries := 3
+	retryDelay := time.Second * 2
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		fmt.Printf("🔄 尝试第 %d 次...\n", attempt)
+
+		// 创建 HTTP 客户端，设置 User-Agent
+		client := &http.Client{
+			Timeout: 30 * time.Second,
+		}
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			fmt.Printf("❌ 创建请求失败: %v\n", err)
+			return nil, err
+		}
+
+		// 设置 User-Agent 避免被限制
+		req.Header.Set("User-Agent", "Qwen-cli/"+Version)
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("❌ HTTP 请求失败: %v\n", err)
+			if attempt < maxRetries {
+				fmt.Printf("⏳ %d 秒后重试...\n", retryDelay)
+				time.Sleep(retryDelay)
+				retryDelay *= 2 // 指数退避
+				continue
+			}
+			return nil, err
+		}
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+
+		fmt.Printf("📊 响应状态码: %d\n", resp.StatusCode)
+
+		// 处理速率限制
+		if resp.StatusCode == 403 {
+			fmt.Printf("⚠️ 可能遇到 GitHub API 速率限制\n")
+			if attempt < maxRetries {
+				resetTime := resp.Header.Get("X-RateLimit-Reset")
+				if resetTime != "" {
+					// 解析 Unix 时间戳
+					if timestamp, err := time.Parse("2006-01-02T15:04:05Z", resetTime); err == nil {
+						waitTime := time.Until(timestamp)
+						if waitTime > 0 {
+							fmt.Printf("📅 速率限制将在 %s 后重置\n", timestamp.Format("15:04:05"))
+							fmt.Printf("⏳ 需要等待 %.0f 分钟\n", waitTime.Minutes())
+							retryDelay = waitTime
+						}
+					} else {
+						fmt.Printf("📅 速率限制重置时间: %s\n", resetTime)
+					}
+				}
+				fmt.Printf("⏳ %d 秒后重试...\n", retryDelay)
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return nil, fmt.Errorf("GitHub API 速率限制，请稍后再试")
+		}
+
+		// 处理其他错误状态码
+		if resp.StatusCode != 200 {
+			if attempt < maxRetries {
+				fmt.Printf("⏳ %d 秒后重试...\n", retryDelay)
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return nil, fmt.Errorf("API 请求失败，状态码: %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Printf("❌ 读取响应失败: %v\n", err)
+			if attempt < maxRetries {
+				fmt.Printf("⏳ %d 秒后重试...\n", retryDelay)
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return nil, err
+		}
+
+		fmt.Printf("📄 响应内容长度: %d 字节\n", len(body))
+
+		var release ReleaseInfo
+		if err := json.Unmarshal(body, &release); err != nil {
+			fmt.Printf("❌ JSON 解析失败: %v\n", err)
+			fmt.Printf("📝 原始响应: %s\n", string(body))
+			return nil, err
+		}
+
+		fmt.Printf("✅ 成功解析发布信息: %s\n", release.TagName)
+		return &release, nil
 	}
 
-	var release ReleaseInfo
-	if err := json.Unmarshal(body, &release); err != nil {
-		return nil, err
-	}
-
-	return &release, nil
+	return nil, fmt.Errorf("所有重试均失败")
 }
 
 // GetLatestRelease 获取最新发布信息（导出版本）
