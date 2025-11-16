@@ -112,15 +112,56 @@ func GetDownloadURL(release *ReleaseInfo) string {
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 
+	// 所有平台都优先尝试直接下载可执行文件
 	var pattern string
 	switch osName {
 	case "windows":
 		if arch == "arm64" {
-			// Windows 优先尝试直接下载 exe 文件
 			pattern = "ask_"
 		} else {
-			// Windows 优先尝试直接下载 exe 文件
 			pattern = "ask_"
+		}
+	case "darwin":
+		if arch == "arm64" {
+			pattern = "ask_"
+		} else {
+			pattern = "ask_"
+		}
+	case "linux":
+		if arch == "arm64" {
+			pattern = "ask_"
+		} else {
+			pattern = "ask_"
+		}
+	default:
+		return ""
+	}
+
+	// 查找匹配的资源文件
+	for _, asset := range release.Assets {
+		// 所有平台都优先查找直接的可执行文件
+		if strings.Contains(asset.Name, "ask_") && strings.Contains(asset.Name, "_" + osName + "_") {
+			// Windows 检查 .exe 后缀，其他平台检查无后缀或对应后缀
+			if osName == "windows" {
+				if strings.HasSuffix(asset.Name, ".exe") {
+					return asset.URL
+				}
+			} else {
+				// macOS 和 Linux 的可执行文件通常没有后缀
+				if !strings.Contains(asset.Name, ".") {
+					return asset.URL
+				}
+			}
+		}
+	}
+
+	// 如果没找到直接的可执行文件，回退到压缩包
+	switch osName {
+	case "windows":
+		if arch == "arm64" {
+			pattern = "_windows_arm64.tar.gz"
+		} else {
+			pattern = "_windows_amd64.tar.gz"
 		}
 	case "darwin":
 		if arch == "arm64" {
@@ -134,37 +175,11 @@ func GetDownloadURL(release *ReleaseInfo) string {
 		} else {
 			pattern = "_linux_amd64.tar.gz"
 		}
-	default:
-		return ""
 	}
 
-	// 查找匹配的资源文件
 	for _, asset := range release.Assets {
-		if osName == "windows" {
-			// Windows 特殊处理：优先查找直接的可执行文件
-			if strings.Contains(asset.Name, "ask_") && strings.Contains(asset.Name, "_windows_") &&
-			   (strings.HasSuffix(asset.Name, ".exe") || !strings.Contains(asset.Name, ".")) {
-				return asset.URL
-			}
-		} else {
-			// 其他系统使用原有的压缩包逻辑
-			if strings.Contains(asset.Name, pattern) {
-				return asset.URL
-			}
-		}
-	}
-
-	// 如果 Windows 没找到直接的可执行文件，回退到压缩包
-	if osName == "windows" {
-		if arch == "arm64" {
-			pattern = "_windows_arm64.tar.gz"
-		} else {
-			pattern = "_windows_amd64.tar.gz"
-		}
-		for _, asset := range release.Assets {
-			if strings.Contains(asset.Name, pattern) {
-				return asset.URL
-			}
+		if strings.Contains(asset.Name, pattern) {
+			return asset.URL
 		}
 	}
 
@@ -179,12 +194,11 @@ func DownloadAndInstall(url string) error {
 		return fmt.Errorf("获取可执行文件路径失败: %v", err)
 	}
 
-	// 检查是否是直接的可执行文件下载（Windows）
-	isDirectBinary := runtime.GOOS == "windows" &&
-		(strings.Contains(url, "ask_") && !strings.Contains(url, ".tar.gz"))
+	// 检查是否是直接的可执行文件下载（所有平台）
+	isDirectBinary := strings.Contains(url, "ask_") && !strings.Contains(url, ".tar.gz")
 
 	if isDirectBinary {
-		// Windows 直接下载可执行文件
+		// 所有平台都直接下载可执行文件
 		return downloadAndInstallBinary(url, execPath)
 	} else {
 		// 下载压缩包并安装
@@ -192,12 +206,20 @@ func DownloadAndInstall(url string) error {
 	}
 }
 
-// downloadAndInstallBinary 下载并安装直接的可执行文件（主要用于Windows）
+// downloadAndInstallBinary 下载并安装直接的可执行文件（用于所有平台）
 func downloadAndInstallBinary(url, execPath string) error {
 	fmt.Println("📦 正在下载可执行文件...")
 
+	// 根据操作系统确定临时文件扩展名
+	var ext string
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	} else {
+		ext = ""
+	}
+
 	// 创建临时文件
-	tmpFile, err := os.CreateTemp("", "qwen-cli-update-*.exe")
+	tmpFile, err := os.CreateTemp("", "qwen-cli-update-*"+ext)
 	if err != nil {
 		return fmt.Errorf("创建临时文件失败: %v", err)
 	}
@@ -221,8 +243,9 @@ func downloadAndInstallBinary(url, execPath string) error {
 		return fmt.Errorf("写入文件失败: %v", err)
 	}
 
-	// 在Windows上，需要创建一个批处理文件来替换可执行文件
-	batchContent := fmt.Sprintf(`@echo off
+	if runtime.GOOS == "windows" {
+		// 在Windows上，需要创建一个批处理文件来替换可执行文件
+		batchContent := fmt.Sprintf(`@echo off
 echo 正在更新 Qwen-cli...
 timeout /t 2 /nobreak >nul
 move /Y "%s" "%s" >nul 2>&1
@@ -230,25 +253,56 @@ echo 更新完成！
 del "%%~f0"
 `, tmpFile.Name(), execPath)
 
-	// 创建批处理文件
-	batchFile := execPath + ".update.bat"
-	err = os.WriteFile(batchFile, []byte(batchContent), 0644)
-	if err != nil {
-		return fmt.Errorf("创建更新脚本失败: %v", err)
+		// 创建批处理文件
+		batchFile := execPath + ".update.bat"
+		err = os.WriteFile(batchFile, []byte(batchContent), 0644)
+		if err != nil {
+			return fmt.Errorf("创建更新脚本失败: %v", err)
+		}
+
+		// 启动批处理文件并退出当前程序
+		cmd := exec.Command("cmd", "/C", batchFile)
+		cmd.Start()
+
+		fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
+		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
+	} else {
+		// 在Unix系统上，直接替换可执行文件
+		// 备份当前版本
+		backupPath := execPath + ".backup"
+		err = os.Rename(execPath, backupPath)
+		if err != nil {
+			return fmt.Errorf("备份当前版本失败: %v", err)
+		}
+
+		// 移动新版本到目标位置
+		err = os.Rename(tmpFile.Name(), execPath)
+		if err != nil {
+			// 如果失败，恢复备份
+			os.Rename(backupPath, execPath)
+			return fmt.Errorf("替换文件失败: %v", err)
+		}
+
+		// 设置执行权限
+		err = os.Chmod(execPath, 0755)
+		if err != nil {
+			return fmt.Errorf("设置执行权限失败: %v", err)
+		}
+
+		// 删除备份文件
+		os.Remove(backupPath)
+
+		fmt.Println("✅ 更新完成！")
+		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
 	}
-
-	// 启动批处理文件并退出当前程序
-	cmd := exec.Command("cmd", "/C", batchFile)
-	cmd.Start()
-
-	fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
-	fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
 
 	return nil
 }
 
-// downloadAndInstallArchive 下载压缩包并安装（用于Unix系统和Windows压缩包）
+// downloadAndInstallArchive 下载压缩包并安装（备用方案）
 func downloadAndInstallArchive(url, execPath string) error {
+	fmt.Println("📦 正在下载压缩包...")
+
 	// 创建临时文件
 	tmpFile, err := os.CreateTemp("", "qwen-cli-update-*.tar.gz")
 	if err != nil {
@@ -339,6 +393,9 @@ func downloadAndInstallArchive(url, execPath string) error {
 
 	// 删除备份文件
 	os.Remove(backupPath)
+
+	fmt.Println("✅ 更新完成！")
+	fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
 
 	return nil
 }
