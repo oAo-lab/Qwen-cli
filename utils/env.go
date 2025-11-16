@@ -24,14 +24,21 @@ func GetEnvironmentInfo() string {
 	// 根据操作系统获取更详细的信息
 	switch runtime.GOOS {
 	case "windows":
+		info.WriteString("操作系统类型: Windows\n")
 		info.WriteString("终端类型: cmd/PowerShell\n")
 		info.WriteString("命令语法: Windows命令\n")
+		info.WriteString("路径分隔符: \\\n")
+		info.WriteString("注意事项: 请使用Windows格式的命令，如 dir 而不是 ls\n")
 	case "darwin":
+		info.WriteString("操作系统类型: macOS\n")
 		info.WriteString("终端类型: Terminal/zsh/bash\n")
 		info.WriteString("命令语法: Unix/macOS命令\n")
+		info.WriteString("路径分隔符: /\n")
 	case "linux":
+		info.WriteString("操作系统类型: Linux\n")
 		info.WriteString("终端类型: bash/zsh/其他shell\n")
 		info.WriteString("命令语法: Linux命令\n")
+		info.WriteString("路径分隔符: /\n")
 	}
 	
 	// 获取当前工作目录

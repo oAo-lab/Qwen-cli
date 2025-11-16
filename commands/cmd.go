@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -168,8 +169,16 @@ func CmdCommand(cfg config.Config) *cobra.Command {
 				// 执行命令并捕获输出
 				fmt.Printf("\n🚀 正在执行命令...\n\n")
 				
-				// 使用shell执行命令，支持管道和重定向，并捕获输出
-				execCmd := exec.Command("sh", "-c", generatedCmd)
+				// 根据操作系统选择合适的shell执行命令
+				var execCmd *exec.Cmd
+				if runtime.GOOS == "windows" {
+					// Windows系统使用cmd
+					execCmd = exec.Command("cmd", "/C", generatedCmd)
+				} else {
+					// Unix/Linux系统使用sh
+					execCmd = exec.Command("sh", "-c", generatedCmd)
+				}
+				
 				var out bytes.Buffer
 				var stderr bytes.Buffer
 				execCmd.Stdout = &out
@@ -429,8 +438,16 @@ func CmdCommand(cfg config.Config) *cobra.Command {
 					// 执行命令并捕获输出
 					fmt.Printf("\n🚀 正在执行命令...\n\n")
 					
-					// 使用shell执行命令，支持管道和重定向，并捕获输出
-					execCmd := exec.Command("sh", "-c", aiResponse)
+					// 根据操作系统选择合适的shell执行命令
+					var execCmd *exec.Cmd
+					if runtime.GOOS == "windows" {
+						// Windows系统使用cmd
+						execCmd = exec.Command("cmd", "/C", aiResponse)
+					} else {
+						// Unix/Linux系统使用sh
+						execCmd = exec.Command("sh", "-c", aiResponse)
+					}
+					
 					var out bytes.Buffer
 					var stderr bytes.Buffer
 					execCmd.Stdout = &out
