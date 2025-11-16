@@ -85,6 +85,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
       
+      - name: Set timezone to Asia/Shanghai
+        run: |
+          sudo timedatectl set-timezone Asia/Shanghai
+          date
+      
       - name: Create and push tag
         run: |
           git config --local user.email "action@github.com"
@@ -100,6 +105,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TZ: Asia/Shanghai
 
   # 原有的标签触发发布（保持兼容性）
   tag-release:
@@ -114,6 +120,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
       
+      - name: Set timezone to Asia/Shanghai
+        run: |
+          sudo timedatectl set-timezone Asia/Shanghai
+          date
+      
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -122,3 +133,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TZ: Asia/Shanghai
