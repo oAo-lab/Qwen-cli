@@ -55,7 +55,7 @@ archives:
     builds:
       - ask-updater
     format: binary  # Windows 更新器直接发布 exe 文件
-    name_template: 'ask_updater_{{.Version}}_{{.Os}}_{{.Arch}}'
+    name_template: 'ask_updater_{{.RawVersion}}_{{.Os}}_{{.Arch}}'
     allow_different_binary_count: true
 
 release:

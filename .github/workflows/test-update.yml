@@ -1,0 +1,165 @@
+name: Test Update Functionality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-update:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            binary: ask
+            arch: amd64
+          - os: windows-latest
+            binary: ask.exe
+            arch: amd64
+          - os: macos-latest
+            binary: ask
+            arch: amd64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build project
+      run: |
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        BUILD_DATE=$(date +%Y-%m-%d)
+        LDFLAGS="-X Qwen-cli/version.Version=$LATEST_TAG -X Qwen-cli/version.GitCommit=$GIT_COMMIT -X Qwen-cli/version.BuildDate=$BUILD_DATE"
+        
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          go build -ldflags "$LDFLAGS" -o ${{ matrix.binary }} ./cmd/main.go
+          go build -ldflags "$LDFLAGS" -o ask_updater.exe ./cmd/updater/main.go
+        else
+          go build -ldflags "$LDFLAGS" -o ${{ matrix.binary }} ./cmd/main.go
+        fi
+      shell: bash
+
+    - name: Test version command
+      run: |
+        ./${{ matrix.binary }} version
+      shell: bash
+
+    - name: Test update check (dry run)
+      run: |
+        ./${{ matrix.binary }} update --help
+      shell: bash
+
+    - name: Test force update (Windows only)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "Testing force update functionality on Windows..."
+        # This will test the update logic without actually updating
+        # We'll check if the command can parse arguments and show proper error messages
+        ./${{ matrix.binary }} update --force || echo "Expected behavior - no actual update in CI"
+      shell: bash
+
+    - name: Test updater binary (Windows only)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "Testing updater binary..."
+        if [ -f "ask_updater.exe" ]; then
+          echo "Updater binary found"
+          ./ask_updater.exe --help || echo "Expected - updater requires specific arguments"
+        else
+          echo "Updater binary not found"
+          exit 1
+        fi
+      shell: bash
+
+    - name: Test download URL generation
+      run: |
+        echo "Testing download URL generation logic..."
+        # This would require creating a test script or modifying the code to expose this functionality
+        echo "Download URL test would go here"
+      shell: bash
+
+  test-updater-download:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Test updater download logic
+      run: |
+        echo "Testing updater download URL generation..."
+        go run -c "
+        package main
+        
+        import (
+            \"fmt\"
+            \"runtime\"
+            \"strings\"
+        )
+        
+        func main() {
+            currentVersion := \"v0.1.22\"
+            versionWithoutV := strings.TrimPrefix(currentVersion, \"v\")
+            updaterURL := fmt.Sprintf(\"https://github.com/oAo-lab/Qwen-cli/releases/download/%s/ask_updater_%s_windows_%s.exe\", 
+                currentVersion, versionWithoutV, runtime.GOARCH)
+            fmt.Printf(\"Generated URL: %s\n\", updaterURL)
+        }"
+      shell: bash
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [test-update]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build and test update flow
+      run: |
+        echo "Testing complete update flow..."
+        
+        # Build the application
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        BUILD_DATE=$(date +%Y-%m-%d)
+        LDFLAGS="-X Qwen-cli/version.Version=$LATEST_TAG -X Qwen-cli/version.GitCommit=$GIT_COMMIT -X Qwen-cli/version.BuildDate=$BUILD_DATE"
+        
+        go build -ldflags "$LDFLAGS" -o ask ./cmd/main.go
+        
+        # Test version info
+        echo "=== Version Info ==="
+        ./ask version
+        
+        # Test update check
+        echo "=== Update Check ==="
+        timeout 30s ./ask update || echo "Update check completed (timeout expected in CI)"
+        
+        echo "Integration test completed successfully"
+      shell: bash

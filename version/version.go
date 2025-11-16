@@ -502,15 +502,17 @@ func downloadUpdater() (string, error) {
 		}
 	}
 
-	// 构建更新器下载URL
-	// 这里假设更新器与主程序使用相同的版本号
-	// 实际使用时需要根据你的发布结构调整
-	updaterURL := fmt.Sprintf("https://github.com/oAo-lab/Qwen-cli/releases/download/%s/ask_updater_%s_windows_amd64.exe",
-		currentVersion, currentVersion)
+	// 构建更新器下载URL，根据实际发布结构调整
+	// 从GitHub Releases可以看到文件名格式为：ask_updater_0.1.22_windows_amd64.exe
+	versionWithoutV := strings.TrimPrefix(currentVersion, "v")
+	updaterURL := fmt.Sprintf("https://github.com/oAo-lab/Qwen-cli/releases/download/%s/ask_updater_%s_windows_%s.exe",
+		currentVersion, versionWithoutV, runtime.GOARCH)
 
 	// 创建临时文件保存更新器
 	tempDir := os.TempDir()
 	updaterPath := filepath.Join(tempDir, "ask_updater.exe")
+
+	fmt.Printf("📥 正在下载更新器: %s\n", updaterURL)
 
 	// 下载更新器
 	resp, err := http.Get(updaterURL)
@@ -520,7 +522,7 @@ func downloadUpdater() (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("下载更新器失败，状态码: %d", resp.StatusCode)
+		return "", fmt.Errorf("下载更新器失败，状态码: %d，URL: %s", resp.StatusCode, updaterURL)
 	}
 
 	// 保存更新器文件
@@ -564,6 +566,11 @@ func getLatestRelease() (*ReleaseInfo, error) {
 	}
 
 	return &release, nil
+}
+
+// GetLatestRelease 获取最新发布信息（导出版本）
+func GetLatestRelease() (*ReleaseInfo, error) {
+	return getLatestRelease()
 }
 
 // getExecutablePath 获取当前可执行文件路径
