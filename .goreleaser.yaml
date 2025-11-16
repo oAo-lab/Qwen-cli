@@ -16,6 +16,10 @@ builds:
     goarch:
       - amd64
       - arm64
+    ldflags:
+      - -X Qwen-cli/version.Version={{.Version}}
+      - -X Qwen-cli/version.GitCommit={{.Commit}}
+      - -X Qwen-cli/version.BuildDate={{.Date}}
     # goversion: '1.24.1' # Specify Go version in build settings (deprecated in v2)
 
 release:
