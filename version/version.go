@@ -515,7 +515,7 @@ func downloadUpdater() (string, error) {
 	// 构建更新器下载URL，根据实际发布结构调整
 	// 从GitHub Releases可以看到文件名格式为：ask_updater_0.1.22_windows_amd64.exe
 	versionWithoutV := strings.TrimPrefix(currentVersion, "v")
-	updaterURL := fmt.Sprintf("https://github.com/oAo-lab/Qwen-cli/releases/download/%s/ask_updater_%s_windows_%s.exe",
+	updaterURL := fmt.Sprintf("https://github.com/oAo-lab/Qwen-cli/releases/download/v%s/ask_updater_%s_windows_%s.exe",
 		currentVersion, versionWithoutV, runtime.GOARCH)
 
 	// 创建临时文件保存更新器
