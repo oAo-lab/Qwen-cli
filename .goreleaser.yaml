@@ -1,6 +1,10 @@
 # .goreleaser.yaml
 version: 2
 
+before:
+  hooks:
+    - go mod tidy
+
 builds:
   - id: ask-binary
     binary: ask
@@ -12,7 +16,7 @@ builds:
     goarch:
       - amd64
       - arm64
-    goversion: '1.24.1' # Specify Go version in build settings
+    # goversion: '1.24.1' # Specify Go version in build settings (deprecated in v2)
 
 release:
   github:
