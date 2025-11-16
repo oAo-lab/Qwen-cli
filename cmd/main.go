@@ -19,8 +19,10 @@ func main() {
 		Long:  `通义千问命令行客户端，支持多模型对话和角色切换。`,
 	}
 
-	// 添加 init 命令（不需要配置）
+	// 添加不需要配置的命令
 	rootCmd.AddCommand(commands.InitCommand())
+	rootCmd.AddCommand(commands.VersionCommand())
+	rootCmd.AddCommand(commands.UpdateCommand())
 
 	// 尝试加载配置并添加需要配置的命令
 	cfg, err := config.LoadConfig()

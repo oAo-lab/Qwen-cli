@@ -50,7 +50,10 @@ check-remote:
 build:
 	@echo "🔨 构建项目..."
 	@if command -v go >/dev/null 2>&1; then \
-		go build -o ask ./cmd/main.go && echo "✅ 构建成功: ./ask"; \
+		LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0"); \
+		GIT_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+		BUILD_DATE=$$(date +%Y-%m-%d); \
+		go build -ldflags "-X Qwen-cli/version.Version=$$LATEST_TAG -X Qwen-cli/version.GitCommit=$$GIT_COMMIT -X Qwen-cli/version.BuildDate=$$BUILD_DATE" -o ask ./cmd/main.go && echo "✅ 构建成功: ./ask"; \
 	else \
 		echo "❌ 错误: 未找到 Go 编译器"; \
 		echo "请安装 Go: https://golang.org/dl/"; \
@@ -60,16 +63,21 @@ build:
 build-all:
 	@echo "🔨 构建多平台版本..."
 	@if command -v go >/dev/null 2>&1; then \
+		LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0"); \
+		GIT_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+		BUILD_DATE=$$(date +%Y-%m-%d); \
+		LDFLAGS="-X Qwen-cli/version.Version=$$LATEST_TAG -X Qwen-cli/version.GitCommit=$$GIT_COMMIT -X Qwen-cli/version.BuildDate=$$BUILD_DATE"; \
+		mkdir -p dist; \
 		echo "构建 Linux AMD64..."; \
-		GOOS=linux GOARCH=amd64 go build -o dist/ask-linux-amd64 ./cmd/main.go; \
+		GOOS=linux GOARCH=amd64 go build -ldflags "$$LDFLAGS" -o dist/ask-linux-amd64 ./cmd/main.go; \
 		echo "构建 Linux ARM64..."; \
-		GOOS=linux GOARCH=arm64 go build -o dist/ask-linux-arm64 ./cmd/main.go; \
+		GOOS=linux GOARCH=arm64 go build -ldflags "$$LDFLAGS" -o dist/ask-linux-arm64 ./cmd/main.go; \
 		echo "构建 Windows AMD64..."; \
-		GOOS=windows GOARCH=amd64 go build -o dist/ask-windows-amd64.exe ./cmd/main.go; \
+		GOOS=windows GOARCH=amd64 go build -ldflags "$$LDFLAGS" -o dist/ask-windows-amd64.exe ./cmd/main.go; \
 		echo "构建 macOS AMD64..."; \
-		GOOS=darwin GOARCH=amd64 go build -o dist/ask-darwin-amd64 ./cmd/main.go; \
+		GOOS=darwin GOARCH=amd64 go build -ldflags "$$LDFLAGS" -o dist/ask-darwin-amd64 ./cmd/main.go; \
 		echo "构建 macOS ARM64..."; \
-		GOOS=darwin GOARCH=arm64 go build -o dist/ask-darwin-arm64 ./cmd/main.go; \
+		GOOS=darwin GOARCH=arm64 go build -ldflags "$$LDFLAGS" -o dist/ask-darwin-arm64 ./cmd/main.go; \
 		echo "✅ 多平台构建完成，输出目录: ./dist/"; \
 	else \
 		echo "❌ 错误: 未找到 Go 编译器"; \
@@ -80,7 +88,10 @@ build-all:
 install:
 	@echo "📦 安装到系统路径..."
 	@if command -v go >/dev/null 2>&1; then \
-		go build -o ask ./cmd/main.go && \
+		LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0"); \
+		GIT_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+		BUILD_DATE=$$(date +%Y-%m-%d); \
+		go build -ldflags "-X Qwen-cli/version.Version=$$LATEST_TAG -X Qwen-cli/version.GitCommit=$$GIT_COMMIT -X Qwen-cli/version.BuildDate=$$BUILD_DATE" -o ask ./cmd/main.go && \
 		sudo mv ask /usr/local/bin/ && echo "✅ 安装成功: /usr/local/bin/ask"; \
 	else \
 		echo "❌ 错误: 未找到 Go 编译器"; \
