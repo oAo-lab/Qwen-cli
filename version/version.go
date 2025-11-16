@@ -1,11 +1,14 @@
 package version
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -108,21 +111,25 @@ func GetDownloadURL(release *ReleaseInfo) string {
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 
-	var suffix string
+	var pattern string
 	switch osName {
 	case "windows":
-		suffix = "windows-amd64.exe"
+		if arch == "arm64" {
+			pattern = "_windows_arm64.tar.gz"
+		} else {
+			pattern = "_windows_amd64.tar.gz"
+		}
 	case "darwin":
 		if arch == "arm64" {
-			suffix = "darwin-arm64"
+			pattern = "_darwin_arm64.tar.gz"
 		} else {
-			suffix = "darwin-amd64"
+			pattern = "_darwin_amd64.tar.gz"
 		}
 	case "linux":
 		if arch == "arm64" {
-			suffix = "linux-arm64"
+			pattern = "_linux_arm64.tar.gz"
 		} else {
-			suffix = "linux-amd64"
+			pattern = "_linux_amd64.tar.gz"
 		}
 	default:
 		return ""
@@ -130,7 +137,7 @@ func GetDownloadURL(release *ReleaseInfo) string {
 
 	// 查找匹配的资源文件
 	for _, asset := range release.Assets {
-		if strings.HasSuffix(asset.Name, suffix) {
+		if strings.Contains(asset.Name, pattern) {
 			return asset.URL
 		}
 	}
@@ -141,7 +148,7 @@ func GetDownloadURL(release *ReleaseInfo) string {
 // DownloadAndInstall 下载并安装新版本
 func DownloadAndInstall(url string) error {
 	// 创建临时文件
-	tmpFile, err := os.CreateTemp("", "qwen-cli-update-*.exe")
+	tmpFile, err := os.CreateTemp("", "qwen-cli-update-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("创建临时文件失败: %v", err)
 	}
@@ -174,14 +181,57 @@ func DownloadAndInstall(url string) error {
 	// 在Windows上，需要先关闭当前程序才能替换文件
 	if runtime.GOOS == "windows" {
 		fmt.Println("在Windows上更新需要手动替换文件...")
-		fmt.Printf("请将以下文件替换当前程序: %s\n", tmpFile.Name())
-		fmt.Printf("当前程序位置: %s\n", execPath)
+		fmt.Printf("请手动下载并解压以下文件: %s\n", url)
+		fmt.Printf("然后将解压后的可执行文件替换当前程序: %s\n", execPath)
 		return nil
 	}
 
-	// 在Unix系统上，可以直接替换文件
-	err = os.Rename(tmpFile.Name(), execPath)
+	// 在Unix系统上，自动解压并替换文件
+	fmt.Println("📦 正在解压更新包...")
+	
+	// 创建临时目录
+	tmpDir, err := os.MkdirTemp("", "qwen-cli-update-*")
 	if err != nil {
+		return fmt.Errorf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 解压文件
+	err = extractTarGz(tmpFile.Name(), tmpDir)
+	if err != nil {
+		return fmt.Errorf("解压失败: %v", err)
+	}
+
+	// 查找解压后的可执行文件
+	var binaryPath string
+	files, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return fmt.Errorf("读取解压目录失败: %v", err)
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && (file.Name() == "ask" || (runtime.GOOS == "windows" && file.Name() == "ask.exe")) {
+			binaryPath = tmpDir + "/" + file.Name()
+			break
+		}
+	}
+
+	if binaryPath == "" {
+		return fmt.Errorf("在更新包中找不到可执行文件")
+	}
+
+	// 备份当前版本
+	backupPath := execPath + ".backup"
+	err = os.Rename(execPath, backupPath)
+	if err != nil {
+		return fmt.Errorf("备份当前版本失败: %v", err)
+	}
+
+	// 移动新版本到目标位置
+	err = os.Rename(binaryPath, execPath)
+	if err != nil {
+		// 如果失败，恢复备份
+		os.Rename(backupPath, execPath)
 		return fmt.Errorf("替换文件失败: %v", err)
 	}
 
@@ -189,6 +239,67 @@ func DownloadAndInstall(url string) error {
 	err = os.Chmod(execPath, 0755)
 	if err != nil {
 		return fmt.Errorf("设置执行权限失败: %v", err)
+	}
+
+	// 删除备份文件
+	os.Remove(backupPath)
+
+	return nil
+}
+
+// extractTarGz 解压 tar.gz 文件到指定目录
+func extractTarGz(src, dest string) error {
+	// 打开 gzip 文件
+	gzFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("打开gzip文件失败: %v", err)
+	}
+	defer gzFile.Close()
+
+	// 创建 gzip reader
+	gzReader, err := gzip.NewReader(gzFile)
+	if err != nil {
+		return fmt.Errorf("创建gzip reader失败: %v", err)
+	}
+	defer gzReader.Close()
+
+	// 创建 tar reader
+	tarReader := tar.NewReader(gzReader)
+
+	// 遍历 tar 文件中的每个文件
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break // 文件结束
+		}
+		if err != nil {
+			return fmt.Errorf("读取tar文件失败: %v", err)
+		}
+
+		// 构建目标文件路径
+		targetPath := filepath.Join(dest, header.Name)
+
+		// 根据文件类型进行处理
+		switch header.Typeflag {
+		case tar.TypeDir:
+			// 创建目录
+			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
+				return fmt.Errorf("创建目录失败: %v", err)
+			}
+		case tar.TypeReg:
+			// 创建文件
+			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return fmt.Errorf("创建文件失败: %v", err)
+			}
+
+			// 复制文件内容
+			if _, err := io.Copy(outFile, tarReader); err != nil {
+				outFile.Close()
+				return fmt.Errorf("写入文件失败: %v", err)
+			}
+			outFile.Close()
+		}
 	}
 
 	return nil

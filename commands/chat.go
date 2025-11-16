@@ -19,10 +19,13 @@ import (
 func ChatCommand(cfg config.Config) *cobra.Command {
 	chatCmd := &cobra.Command{
 		Use:   "chat",
-		Short: "Start a chat session with the LLM",
+		Short: "与AI进行对话",
 		Run: func(cmd *cobra.Command, args []string) {
 			reader := bufio.NewReader(cmd.InOrStdin())
 			fmt.Printf("\n🤖 欢迎使用通义千问聊天！输入 'exit' 结束对话。\n")
+
+			// 获取环境信息
+			envInfo := utils.GetEnvironmentInfo()
 
 			// Initialize conversation history
 			conversation := []struct {
@@ -31,12 +34,15 @@ func ChatCommand(cfg config.Config) *cobra.Command {
 			}{
 				{
 					Role: "system",
-					Content: `\{纯文本输出,清晰明了,纯文本输出,指明自己是 {role: Fromsko 定制的智能助手, 能够协助你解决各种问题.}列出访问的指令, 没有指令则默认为对话.}
+					Content: fmt.Sprintf(`\{纯文本输出,清晰明了,纯文本输出,指明自己是 {role: Fromsko 定制的智能助手, 能够协助你解决各种问题.}列出访问的指令, 没有指令则默认为对话.}
 					我是 {{role}}
 					访问指令如下:
 						/prompt 切换角色
 						/model  切换模型
 						/online 开启联网
+					---
+					环境信息：
+					%s
 					---
 					示例回复:
 					你好！我是 Fromsko 定制的智能助手，能够协助你解决各种问题。以下是支持访问的指令：
@@ -46,7 +52,7 @@ func ChatCommand(cfg config.Config) *cobra.Command {
 					/online 开启联网
 
 					如果需要帮助，请随时告诉我！😊
-					`,
+					`, envInfo),
 				},
 			}
 
@@ -349,3 +355,4 @@ func saveFullConversation(conversation []struct {
 	fmt.Printf("已保存完整对话到 %s\n", fileName)
 	// fmt.Printf("调试信息: 文件路径 - %s\n", fileName) // Debug print
 }
+

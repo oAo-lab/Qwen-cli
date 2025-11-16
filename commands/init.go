@@ -12,13 +12,13 @@ import (
 func InitCommand() *cobra.Command {
 	initCmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize configuration file",
-		Long: `Initialize a new configuration file in the user's config directory.
-The configuration file will be created at:
-  - Windows: %USERPROFILE%\.config\ask\config.json
-  - macOS/Linux: ~/.config/ask/config.json
+		Short: "初始化配置文件",
+		Long: `在用户配置目录中创建新的配置文件。
+配置文件将创建在以下位置：
+	 - Windows: %USERPROFILE%\.config\ask\config.json
+	 - macOS/Linux: ~/.config/ask/config.json
 
-If the configuration file already exists, this command will show an error.`,
+如果配置文件已存在，此命令将显示错误。`,
 		Run: func(cmd *cobra.Command, args []string) {
 			err := config.InitConfig()
 			if err != nil {

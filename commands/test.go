@@ -13,7 +13,7 @@ import (
 func TestCommand(cfg config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "test",
-		Short: "Test the model or endpoint connectivity",
+		Short: "测试模型或端点连接",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Testing connectivity to the model...")
 
@@ -43,7 +43,7 @@ func TestCommand(cfg config.Config) *cobra.Command {
 			jsonParams, _ := json.Marshal(params)
 
 			err := client.Client(cfg.APIURL, cfg.APIKey, jsonParams, func(data []byte) {
-				fmt.Println("Connectivity test successful!")
+				fmt.Println("连接测试成功！")
 				var response struct {
 					Choices []struct {
 						Message struct {
@@ -54,20 +54,20 @@ func TestCommand(cfg config.Config) *cobra.Command {
 
 				err := json.Unmarshal(data, &response)
 				if err != nil {
-					fmt.Printf("Error parsing response: %s\n", err)
+					fmt.Printf("解析响应错误: %s\n", err)
 					return
 				}
 
 				if len(response.Choices) > 0 {
-					fmt.Println("Response from model:")
+					fmt.Println("模型响应:")
 					fmt.Println(response.Choices[0].Message.Content)
 				} else {
-					fmt.Println("No response from model.")
+					fmt.Println("模型无响应。")
 				}
 			})
 
 			if err != nil {
-				fmt.Printf("Error: %s\n", err)
+				fmt.Printf("错误: %s\n", err)
 			}
 		},
 	}

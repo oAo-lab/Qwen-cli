@@ -24,6 +24,10 @@ func main() {
 	rootCmd.AddCommand(commands.VersionCommand())
 	rootCmd.AddCommand(commands.UpdateCommand())
 
+	// 移除 completion 和 help
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
+
 	// 尝试加载配置并添加需要配置的命令
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -36,7 +40,6 @@ func main() {
 		rootCmd.AddCommand(commands.ChatCommand(cfg))
 		rootCmd.AddCommand(commands.CmdCommand(cfg))
 		rootCmd.AddCommand(commands.TestCommand(cfg))
-		rootCmd.AddCommand(commands.DebugCommand(cfg))
 	}
 
 	// Handle SIGINT signal to pause the conversation

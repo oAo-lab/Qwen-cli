@@ -5,15 +5,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"Qwen-cli/client"
 	"Qwen-cli/config"
+	"Qwen-cli/utils"
 )
 
 func CmdCommand(cfg config.Config) *cobra.Command {
@@ -79,7 +78,7 @@ func CmdCommand(cfg config.Config) *cobra.Command {
 			currentModel := cfg.Models["default"].Name
 			
 			// 获取环境信息
-			osInfo := getEnvironmentInfo()
+			osInfo := utils.GetEnvironmentInfo()
 
 			// 如果有参数，直接使用作为用户请求（非交互模式）
 			if len(args) > 0 {
@@ -375,7 +374,7 @@ func CmdCommand(cfg config.Config) *cobra.Command {
 					if len(response.Choices) > 0 {
 						content := response.Choices[0].Delta.Content
 						fullResponse.WriteString(content)
-						// 流式显示AI生成的命令
+						// 流式显示AI响应
 						fmt.Print(content)
 					}
 				})
@@ -498,7 +497,7 @@ func CmdCommand(cfg config.Config) *cobra.Command {
 					}
 				} else {
 					// 普通聊天模式处理
-					fmt.Printf("\n🤖 AI回复：\n\n%s\n\n", aiResponse)
+					fmt.Printf("\n") // 只添加换行，因为内容已经在流式显示中输出过了
 					
 					// 添加AI响应到对话历史
 					conversation = append(conversation, struct {
@@ -514,45 +513,4 @@ func CmdCommand(cfg config.Config) *cobra.Command {
 	}
 
 	return cmdCmd
-}
-
-// getEnvironmentInfo 获取当前环境信息
-func getEnvironmentInfo() string {
-	var info strings.Builder
-	
-	// 操作系统信息
-	info.WriteString(fmt.Sprintf("操作系统: %s\n", runtime.GOOS))
-	info.WriteString(fmt.Sprintf("架构: %s\n", runtime.GOARCH))
-	
-	// 根据操作系统获取更详细的信息
-	switch runtime.GOOS {
-	case "windows":
-		info.WriteString("终端类型: cmd/PowerShell\n")
-		info.WriteString("命令语法: Windows命令\n")
-	case "darwin":
-		info.WriteString("终端类型: Terminal/zsh/bash\n")
-		info.WriteString("命令语法: Unix/macOS命令\n")
-	case "linux":
-		info.WriteString("终端类型: bash/zsh/其他shell\n")
-		info.WriteString("命令语法: Linux命令\n")
-	}
-	
-	// 获取当前工作目录
-	if wd, err := os.Getwd(); err == nil {
-		info.WriteString(fmt.Sprintf("当前目录: %s\n", wd))
-	}
-	
-	// 获取用户信息
-	if user := os.Getenv("USER"); user != "" {
-		info.WriteString(fmt.Sprintf("当前用户: %s\n", user))
-	} else if user := os.Getenv("USERNAME"); user != "" {
-		info.WriteString(fmt.Sprintf("当前用户: %s\n", user))
-	}
-	
-	// 获取shell信息
-	if shell := os.Getenv("SHELL"); shell != "" {
-		info.WriteString(fmt.Sprintf("当前Shell: %s\n", shell))
-	}
-	
-	return info.String()
 }
