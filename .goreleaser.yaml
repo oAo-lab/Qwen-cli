@@ -22,6 +22,22 @@ builds:
       - -X Qwen-cli/version.BuildDate={{.Date}}
     # goversion: '1.24.1' # Specify Go version in build settings (deprecated in v2)
 
+archives:
+  - id: ask-archives
+    builds:
+      - ask-binary
+    format: tar.gz
+    name_template: 'Qwen-cli_{{.Version}}_{{.Os}}_{{.Arch}}'
+    files:
+      - none*  # 只包含二进制文件，不包含其他文件
+
+  - id: ask-windows-exe
+    builds:
+      - ask-binary
+    format: binary  # Windows 直接发布 exe 文件
+    name_template: 'ask_{{.Version}}_{{.Os}}_{{.Arch}}'
+    allow_different_binary_count: true
+
 release:
   github:
     owner: oAo-lab
