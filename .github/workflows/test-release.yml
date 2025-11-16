@@ -1,0 +1,96 @@
+name: Test Release Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+        - dry-run
+        - full-test
+
+permissions:
+  contents: write
+
+jobs:
+  test-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+      
+      - name: Test change detection logic
+        run: |
+          echo "Testing change detection logic..."
+          
+          # 获取最新发布的标签
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Latest tag: $LATEST_TAG"
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "should-release=true"
+            echo "No previous release found, will create initial release"
+          else
+            # 检查自上次发布以来是否有变更
+            CHANGES=$(git log --oneline $LATEST_TAG..HEAD)
+            if [ -n "$CHANGES" ]; then
+              echo "should-release=true"
+              echo "Changes detected since $LATEST_TAG:"
+              echo "$CHANGES"
+            else
+              echo "should-release=false"
+              echo "No changes detected since $LATEST_TAG"
+            fi
+          fi
+      
+      - name: Test version generation
+        run: |
+          echo "Testing version generation logic..."
+          
+          # 获取最新版本号
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+          
+          # 提取版本号并递增
+          if [[ $LATEST_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+            
+            # 简单的补丁版本递增
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+          else
+            NEW_VERSION="v0.1.0"
+          fi
+          
+          echo "Next version: $NEW_VERSION"
+          echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Test GoReleaser (dry run)
+        if: github.event.inputs.test_mode == 'dry-run'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: 'latest'
+          args: release --clean --skip-publish --skip-validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Test GoReleaser (full test)
+        if: github.event.inputs.test_mode == 'full-test'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: 'latest'
+          args: build --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
