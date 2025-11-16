@@ -10,7 +10,7 @@ import (
 	"Qwen-cli/config"
 )
 
-func TestCommand(config config.Config) *cobra.Command {
+func TestCommand(cfg config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "test",
 		Short: "Test the model or endpoint connectivity",
@@ -24,7 +24,7 @@ func TestCommand(config config.Config) *cobra.Command {
 					Content string `json:"content"`
 				} `json:"messages"`
 			}{
-				Model: config.Models["default"].Name,
+				Model: cfg.Models["default"].Name,
 				Messages: []struct {
 					Role    string `json:"role"`
 					Content string `json:"content"`
@@ -42,7 +42,7 @@ func TestCommand(config config.Config) *cobra.Command {
 
 			jsonParams, _ := json.Marshal(params)
 
-			err := client.Client(config.APIURL, config.APIKey, jsonParams, func(data []byte) {
+			err := client.Client(cfg.APIURL, cfg.APIKey, jsonParams, func(data []byte) {
 				fmt.Println("Connectivity test successful!")
 				var response struct {
 					Choices []struct {

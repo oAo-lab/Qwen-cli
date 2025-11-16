@@ -1,0 +1,21 @@
+{
+    "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "api_key": "",
+    "models": {
+        "default": {
+            "name": "qwen-turbo"
+        },
+        "qwen-plus": {
+            "name": "qwen-plus"
+        },
+        "qwen-max": {
+            "name": "qwen-max"
+        }
+    },
+    "roles": {
+        "default": "你是一个有用的AI助手，能够协助用户解决各种问题。",
+        "programmer": "你是一个专业的程序员，擅长编写代码、调试程序和解决技术问题。",
+        "translator": "你是一个专业的翻译，能够准确地在不同语言之间进行翻译。",
+        "teacher": "你是一个耐心的老师，擅长解释复杂的概念和知识。"
+    }
+}

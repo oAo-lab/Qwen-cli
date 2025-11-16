@@ -4,46 +4,38 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
 
 	"Qwen-cli/commands"
 	"Qwen-cli/config"
-	"Qwen-cli/utils"
 )
 
 func main() {
-	exePath, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Error getting executable path: %s\n", err)
-		os.Exit(1)
+	rootCmd := &cobra.Command{
+		Use:   "ask",
+		Short: "通义千问命令行客户端",
+		Long:  `通义千问命令行客户端，支持多模型对话和角色切换。`,
 	}
 
-	exePath, err = filepath.Abs(exePath)
+	// 添加 init 命令（不需要配置）
+	rootCmd.AddCommand(commands.InitCommand())
+
+	// 尝试加载配置并添加需要配置的命令
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("Error resolving absolute path: %s\n", err)
-		os.Exit(1)
+		// 如果配置加载失败，只显示提示信息
+		fmt.Printf("⚠️  配置文件未找到或加载失败: %s\n", err)
+		fmt.Println("💡 请运行 'ask init' 初始化配置文件")
+		fmt.Println()
+	} else {
+		// 配置加载成功，添加需要配置的命令
+		rootCmd.AddCommand(commands.ChatCommand(cfg))
+		rootCmd.AddCommand(commands.CmdCommand(cfg))
+		rootCmd.AddCommand(commands.TestCommand(cfg))
+		rootCmd.AddCommand(commands.DebugCommand(cfg))
 	}
-
-	exeDir := filepath.Dir(exePath)
-	configPath := filepath.Join(exeDir, "config.json")
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		fmt.Printf("Error loading config: %s\n", err)
-		os.Exit(1)
-	}
-
-	utils.DebugPrintln("Executable Path: " + exePath)
-	utils.DebugPrintf("Config Path: %s\n", configPath)
-
-	rootCmd := &cobra.Command{Use: "app"}
-	rootCmd.AddCommand(commands.ChatCommand(cfg))
-	rootCmd.AddCommand(commands.TestCommand(cfg))
-	rootCmd.AddCommand(commands.DebugCommand(cfg))
-	rootCmd.AddCommand(commands.CompletionCommand(rootCmd))
 
 	// Handle SIGINT signal to pause the conversation
 	signalChan := make(chan os.Signal, 1)
@@ -51,7 +43,7 @@ func main() {
 
 	go func() {
 		for range signalChan {
-			fmt.Println("\nConversation paused. Press Enter to continue...")
+			fmt.Println("\n对话已暂停，按回车键继续...")
 			fmt.Scanln()
 		}
 	}()

@@ -46,13 +46,69 @@ check-remote:
 		exit 1; \
 	fi
 
+# Build targets
+build:
+	@echo "🔨 构建项目..."
+	@if command -v go >/dev/null 2>&1; then \
+		go build -o ask ./cmd/main.go && echo "✅ 构建成功: ./ask"; \
+	else \
+		echo "❌ 错误: 未找到 Go 编译器"; \
+		echo "请安装 Go: https://golang.org/dl/"; \
+		exit 1; \
+	fi
+
+build-all:
+	@echo "🔨 构建多平台版本..."
+	@if command -v go >/dev/null 2>&1; then \
+		echo "构建 Linux AMD64..."; \
+		GOOS=linux GOARCH=amd64 go build -o dist/ask-linux-amd64 ./cmd/main.go; \
+		echo "构建 Linux ARM64..."; \
+		GOOS=linux GOARCH=arm64 go build -o dist/ask-linux-arm64 ./cmd/main.go; \
+		echo "构建 Windows AMD64..."; \
+		GOOS=windows GOARCH=amd64 go build -o dist/ask-windows-amd64.exe ./cmd/main.go; \
+		echo "构建 macOS AMD64..."; \
+		GOOS=darwin GOARCH=amd64 go build -o dist/ask-darwin-amd64 ./cmd/main.go; \
+		echo "构建 macOS ARM64..."; \
+		GOOS=darwin GOARCH=arm64 go build -o dist/ask-darwin-arm64 ./cmd/main.go; \
+		echo "✅ 多平台构建完成，输出目录: ./dist/"; \
+	else \
+		echo "❌ 错误: 未找到 Go 编译器"; \
+		echo "请安装 Go: https://golang.org/dl/"; \
+		exit 1; \
+	fi
+
+install:
+	@echo "📦 安装到系统路径..."
+	@if command -v go >/dev/null 2>&1; then \
+		go build -o ask ./cmd/main.go && \
+		sudo mv ask /usr/local/bin/ && echo "✅ 安装成功: /usr/local/bin/ask"; \
+	else \
+		echo "❌ 错误: 未找到 Go 编译器"; \
+		echo "请安装 Go: https://golang.org/dl/"; \
+		exit 1; \
+	fi
+
+test:
+	@echo "🧪 运行测试..."
+	@if command -v go >/dev/null 2>&1; then \
+		go test -v ./...; \
+	else \
+		echo "❌ 错误: 未找到 Go 编译器"; \
+		echo "请安装 Go: https://golang.org/dl/"; \
+		exit 1; \
+	fi
+
 help:
 	@echo "\033[1;32mMakefile Usage:\033[0m"
-	@echo "  \033[1;32mmake add-remote\033[0m         - 配置/更新Git远程仓库"
-	@echo "  \033[1;32mmake commit\033[0m             - 提交变更并选择提交信息"
-	@echo "  \033[1;32mmake push\033[0m               - 自动提交、创建新版本并推送到远程仓库"
-	@echo "  \033[1;32mmake bump-version\033[0m       - 创建新的语义化版本标签"
-	@echo "  \033[1;32mmake clean\033[0m              - 清理生成文件"
+	@echo "  \033[1;32mmake build\033[0m            - 构建项目"
+	@echo "  \033[1;32mmake build-all\033[0m        - 构建多平台版本"
+	@echo "  \033[1;32mmake install\033[0m          - 安装到系统路径"
+	@echo "  \033[1;32mmake test\033[0m             - 运行测试"
+	@echo "  \033[1;32mmake add-remote\033[0m       - 配置/更新Git远程仓库"
+	@echo "  \033[1;32mmake commit\033[0m           - 提交变更并选择提交信息"
+	@echo "  \033[1;32mmake push\033[0m             - 自动提交、创建新版本并推送到远程仓库"
+	@echo "  \033[1;32mmake bump-version\033[0m     - 创建新的语义化版本标签"
+	@echo "  \033[1;32mmake clean\033[0m            - 清理生成文件"
 
 # Add/update remote repository
 add-remote:

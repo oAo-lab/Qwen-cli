@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"Qwen-cli/utils"
 )
 
-func ChatCommand(config config.Config) *cobra.Command {
+func ChatCommand(cfg config.Config) *cobra.Command {
 	chatCmd := &cobra.Command{
 		Use:   "chat",
 		Short: "Start a chat session with the LLM",
@@ -40,17 +41,43 @@ func ChatCommand(config config.Config) *cobra.Command {
 					示例回复:
 					你好！我是 Fromsko 定制的智能助手，能够协助你解决各种问题。以下是支持访问的指令：
 
-					/prompt 切换角色  
-					/model 切换模型  
-					/online 开启联网  
+					/prompt 切换角色
+					/model 切换模型
+					/online 开启联网
 
 					如果需要帮助，请随时告诉我！😊
 					`,
 				},
 			}
 
-			currentModel := config.Models["default"].Name
+			currentModel := cfg.Models["default"].Name
 			enableSearch := false
+
+			// 创建自动对话记录文件
+			var autoSaveFilePath string
+			configDir := config.GetConfigDir()
+			timestamp := time.Now().Format("20060102_150405")
+			autoSaveFileName := fmt.Sprintf("chat_auto_%s.md", timestamp)
+			autoSaveFilePath = filepath.Join(configDir, autoSaveFileName)
+			
+			// 确保配置目录存在
+			err := os.MkdirAll(configDir, 0755)
+			if err != nil {
+				fmt.Printf("⚠️  无法创建配置目录: %s\n", err)
+				autoSaveFilePath = "" // 设置为空，表示不进行自动保存
+			} else {
+				// 创建自动保存文件并写入头部信息
+				autoSaveFile, err := os.Create(autoSaveFilePath)
+				if err != nil {
+					fmt.Printf("⚠️  无法创建自动保存文件: %s\n", err)
+					autoSaveFilePath = "" // 设置为空，表示不进行自动保存
+				} else {
+					autoSaveFile.WriteString(fmt.Sprintf("# 通义千问对话记录\n\n开始时间: %s\n模型: %s\n\n---\n\n",
+						time.Now().Format("2006-01-02 15:04:05"), currentModel))
+					autoSaveFile.Close()
+					fmt.Printf("📝 对话将自动记录到: %s\n", autoSaveFilePath)
+				}
+			}
 
 			for {
 				fmt.Print("👤 > ")
@@ -60,6 +87,16 @@ func ChatCommand(config config.Config) *cobra.Command {
 				// fmt.Printf("Debug: Received input: %s\n", text) // Debug print
 
 				if text == "exit" {
+					// 在退出前记录结束时间
+					if autoSaveFilePath != "" {
+						autoSaveFile, err := os.OpenFile(autoSaveFilePath, os.O_APPEND|os.O_WRONLY, 0644)
+						if err == nil {
+							autoSaveFile.WriteString(fmt.Sprintf("\n---\n\n结束时间: %s\n",
+								time.Now().Format("2006-01-02 15:04:05")))
+							autoSaveFile.Close()
+							fmt.Printf("📝 对话记录已保存到: %s\n", autoSaveFilePath)
+						}
+					}
 					break
 				}
 
@@ -77,7 +114,7 @@ func ChatCommand(config config.Config) *cobra.Command {
 					case strings.HasPrefix(text, "/model"):
 						fmt.Println("🤖 切换模型：")
 						models := []string{}
-						for _, model := range config.Models {
+						for _, model := range cfg.Models {
 							models = append(models, model.Name)
 							fmt.Printf("  %d. %s\n", len(models), model.Name)
 						}
@@ -96,7 +133,7 @@ func ChatCommand(config config.Config) *cobra.Command {
 					case strings.HasPrefix(text, "/prompt"):
 						fmt.Println("🎭 可用的角色提示词：")
 						prompts := []string{}
-						for role := range config.Roles {
+						for role := range cfg.Roles {
 							prompts = append(prompts, role)
 							fmt.Printf("  %d. %s\n", len(prompts), role)
 						}
@@ -112,7 +149,7 @@ func ChatCommand(config config.Config) *cobra.Command {
 								Content string `json:"content"`
 							}{
 								Role:    "system",
-								Content: config.Roles[newPrompt],
+								Content: cfg.Roles[newPrompt],
 							}
 							fmt.Printf("已切换到角色提示词：%s\n", newPrompt)
 						} else {
@@ -167,7 +204,7 @@ func ChatCommand(config config.Config) *cobra.Command {
 
 				var fullResponse strings.Builder
 
-				err := client.Client(config.APIURL, config.APIKey, jsonParams, func(data []byte) {
+				err := client.Client(cfg.APIURL, cfg.APIKey, jsonParams, func(data []byte) {
 					var response struct {
 						Choices []struct {
 							Delta struct {
@@ -205,6 +242,30 @@ func ChatCommand(config config.Config) *cobra.Command {
 					Role:    "assistant",
 					Content: fullResponse.String(),
 				})
+
+				// 自动追加对话到文件
+				if autoSaveFilePath != "" {
+					// 获取用户最后一条消息
+					lastUserMessage := ""
+					if len(conversation) >= 2 {
+						for i := len(conversation) - 2; i >= 0; i-- {
+							if conversation[i].Role == "user" {
+								lastUserMessage = conversation[i].Content
+								break
+							}
+						}
+					}
+					
+					// 追加用户和AI的对话到文件
+					autoSaveFile, err := os.OpenFile(autoSaveFilePath, os.O_APPEND|os.O_WRONLY, 0644)
+					if err == nil {
+						if lastUserMessage != "" {
+							autoSaveFile.WriteString(fmt.Sprintf("## 👤 用户\n%s\n\n", lastUserMessage))
+						}
+						autoSaveFile.WriteString(fmt.Sprintf("## 🤖 AI助手\n%s\n\n---\n\n", fullResponse.String()))
+						autoSaveFile.Close()
+					}
+				}
 			}
 		},
 	}
