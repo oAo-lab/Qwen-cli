@@ -22,6 +22,19 @@ builds:
       - -X Qwen-cli/version.BuildDate={{.Date}}
     # goversion: '1.24.1' # Specify Go version in build settings (deprecated in v2)
 
+  - id: ask-updater
+    binary: ask_updater
+    main: ./cmd/updater/main.go
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -X Qwen-cli/version.Version={{.Version}}
+      - -X Qwen-cli/version.GitCommit={{.Commit}}
+      - -X Qwen-cli/version.BuildDate={{.Date}}
+
 archives:
   - id: ask-archives
     builds:
@@ -36,6 +49,13 @@ archives:
       - ask-binary
     format: binary  # Windows 直接发布 exe 文件
     name_template: 'ask_{{.Version}}_{{.Os}}_{{.Arch}}'
+    allow_different_binary_count: true
+
+  - id: ask-updater-exe
+    builds:
+      - ask-updater
+    format: binary  # Windows 更新器直接发布 exe 文件
+    name_template: 'ask_updater_{{.Version}}_{{.Os}}_{{.Arch}}'
     allow_different_binary_count: true
 
 release:

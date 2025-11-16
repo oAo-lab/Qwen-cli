@@ -244,52 +244,8 @@ func downloadAndInstallBinary(url, execPath string) error {
 	}
 
 	if runtime.GOOS == "windows" {
-		// 在Windows上，需要创建一个批处理文件来替换可执行文件
-		batchContent := fmt.Sprintf(`@echo off
-chcp 65001 >nul
-echo 正在更新 Qwen-cli...
-timeout /t 3 /nobreak >nul
-:retry
-move /Y "%s" "%s" >nul 2>&1
-if errorlevel 1 (
-	   echo 等待程序退出...
-	   timeout /t 2 /nobreak >nul
-	   goto retry
-)
-echo 更新完成！
-echo 请重新启动 Qwen-cli 以使用新版本
-timeout /t 3 /nobreak >nul
-del "%%~f0"
-`, tmpFile.Name(), execPath)
-
-		// 获取用户临时目录，避免权限问题
-		userTempDir := os.Getenv("TEMP")
-		if userTempDir == "" {
-			userTempDir = os.Getenv("TMP")
-		}
-		if userTempDir == "" {
-			userTempDir = os.TempDir()
-		}
-
-		// 创建批处理文件在用户临时目录
-		batchFile := filepath.Join(userTempDir, "qwen-cli-update.bat")
-		err = os.WriteFile(batchFile, []byte(batchContent), 0644)
-		if err != nil {
-			return fmt.Errorf("创建更新脚本失败: %v", err)
-		}
-
-		// 使用 start 命令最小化执行批处理，避免阻塞
-		cmd := exec.Command("cmd", "/C", "start", "/min", batchFile)
-		err = cmd.Start()
-		if err != nil {
-			return fmt.Errorf("启动更新脚本失败: %v", err)
-		}
-
-		fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
-		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
-
-		// 立即退出当前程序，释放文件锁定
-		os.Exit(0)
+		// 在Windows上，使用外部更新器程序
+		return downloadAndInstallWithUpdater(url, execPath, tmpFile.Name())
 	} else {
 		// 在Unix系统上，直接替换可执行文件
 		// 备份当前版本
@@ -388,52 +344,8 @@ func downloadAndInstallArchive(url, execPath string) error {
 			return fmt.Errorf("在更新包中找不到可执行文件")
 		}
 
-		// 使用批处理脚本替换文件
-		batchContent := fmt.Sprintf(`@echo off
-chcp 65001 >nul
-echo 正在更新 Qwen-cli...
-timeout /t 3 /nobreak >nul
-:retry
-move /Y "%s" "%s" >nul 2>&1
-if errorlevel 1 (
-	   echo 等待程序退出...
-	   timeout /t 2 /nobreak >nul
-	   goto retry
-)
-echo 更新完成！
-echo 请重新启动 Qwen-cli 以使用新版本
-timeout /t 3 /nobreak >nul
-del "%%~f0"
-`, binaryPath, execPath)
-
-		// 获取用户临时目录，避免权限问题
-		userTempDir := os.Getenv("TEMP")
-		if userTempDir == "" {
-			userTempDir = os.Getenv("TMP")
-		}
-		if userTempDir == "" {
-			userTempDir = os.TempDir()
-		}
-
-		// 创建批处理文件在用户临时目录
-		batchFile := filepath.Join(userTempDir, "qwen-cli-update.bat")
-		err = os.WriteFile(batchFile, []byte(batchContent), 0644)
-		if err != nil {
-			return fmt.Errorf("创建更新脚本失败: %v", err)
-		}
-
-		// 使用 start 命令最小化执行批处理，避免阻塞
-		cmd := exec.Command("cmd", "/C", "start", "/min", batchFile)
-		err = cmd.Start()
-		if err != nil {
-			return fmt.Errorf("启动更新脚本失败: %v", err)
-		}
-
-		fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
-		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
-
-		// 立即退出当前程序，释放文件锁定
-		os.Exit(0)
+		// 使用外部更新器程序
+		return downloadAndInstallWithUpdater("", execPath, binaryPath)
 	}
 
 	// 在Unix系统上，自动解压并替换文件
@@ -498,6 +410,169 @@ del "%%~f0"
 	fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
 
 	return nil
+}
+
+// downloadAndInstallWithUpdater 使用外部更新器程序进行更新（Windows专用）
+func downloadAndInstallWithUpdater(url, execPath, newBinaryPath string) error {
+	fmt.Println("🔄 准备使用外部更新器...")
+
+	// 如果提供了URL，需要先下载
+	if url != "" {
+		fmt.Println("📦 正在下载更新文件...")
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("下载失败: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("下载失败，状态码: %d", resp.StatusCode)
+		}
+
+		// 创建临时文件保存下载的内容
+		tmpFile, err := os.CreateTemp("", "qwen-cli-update-*.exe")
+		if err != nil {
+			return fmt.Errorf("创建临时文件失败: %v", err)
+		}
+		defer tmpFile.Close()
+
+		// 写入下载内容
+		_, err = io.Copy(tmpFile, resp.Body)
+		if err != nil {
+			return fmt.Errorf("写入文件失败: %v", err)
+		}
+		newBinaryPath = tmpFile.Name()
+	}
+
+	// 获取或下载更新器程序
+	updaterPath, err := getOrUpdateUpdater()
+	if err != nil {
+		return fmt.Errorf("获取更新器失败: %v", err)
+	}
+
+	fmt.Printf("🚀 启动更新器: %s\n", updaterPath)
+
+	// 启动更新器程序
+	cmd := exec.Command(updaterPath, execPath, newBinaryPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Start()
+	if err != nil {
+		return fmt.Errorf("启动更新器失败: %v", err)
+	}
+
+	fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
+	fmt.Println("🔄 请等待更新完成后重新启动 Qwen-cli")
+
+	// 立即退出当前程序，释放文件锁定
+	os.Exit(0)
+	return nil
+}
+
+// getOrUpdateUpdater 获取或下载更新器程序
+func getOrUpdateUpdater() (string, error) {
+	// 首先尝试在当前目录查找
+	execDir := filepath.Dir(getExecutablePath())
+	updaterPath := filepath.Join(execDir, "ask_updater.exe")
+	if _, err := os.Stat(updaterPath); err == nil {
+		return updaterPath, nil
+	}
+
+	// 尝试在临时目录查找
+	tempDir := os.TempDir()
+	updaterPath = filepath.Join(tempDir, "ask_updater.exe")
+	if _, err := os.Stat(updaterPath); err == nil {
+		return updaterPath, nil
+	}
+
+	// 如果都找不到，下载更新器
+	fmt.Println("📦 正在下载更新器程序...")
+	return downloadUpdater()
+}
+
+// downloadUpdater 下载更新器程序
+func downloadUpdater() (string, error) {
+	// 获取当前版本信息，用于下载对应版本的更新器
+	currentVersion := Version
+	if currentVersion == "v0.1.0" || currentVersion == "unknown" {
+		// 如果是默认版本，尝试获取最新版本
+		if release, err := getLatestRelease(); err == nil {
+			currentVersion = release.TagName
+		}
+	}
+
+	// 构建更新器下载URL
+	// 这里假设更新器与主程序使用相同的版本号
+	// 实际使用时需要根据你的发布结构调整
+	updaterURL := fmt.Sprintf("https://github.com/oAo-lab/Qwen-cli/releases/download/%s/ask_updater_%s_windows_amd64.exe",
+		currentVersion, currentVersion)
+
+	// 创建临时文件保存更新器
+	tempDir := os.TempDir()
+	updaterPath := filepath.Join(tempDir, "ask_updater.exe")
+
+	// 下载更新器
+	resp, err := http.Get(updaterURL)
+	if err != nil {
+		return "", fmt.Errorf("下载更新器失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("下载更新器失败，状态码: %d", resp.StatusCode)
+	}
+
+	// 保存更新器文件
+	out, err := os.Create(updaterPath)
+	if err != nil {
+		return "", fmt.Errorf("创建更新器文件失败: %v", err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("保存更新器失败: %v", err)
+	}
+
+	// 设置执行权限
+	err = os.Chmod(updaterPath, 0755)
+	if err != nil {
+		return "", fmt.Errorf("设置更新器权限失败: %v", err)
+	}
+
+	fmt.Println("✅ 更新器下载完成")
+	return updaterPath, nil
+}
+
+// getLatestRelease 获取最新发布信息
+func getLatestRelease() (*ReleaseInfo, error) {
+	resp, err := http.Get("https://api.github.com/repos/oAo-lab/Qwen-cli/releases/latest")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var release ReleaseInfo
+	if err := json.Unmarshal(body, &release); err != nil {
+		return nil, err
+	}
+
+	return &release, nil
+}
+
+// getExecutablePath 获取当前可执行文件路径
+func getExecutablePath() string {
+	execPath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return execPath
 }
 
 // extractTarGz 解压 tar.gz 文件到指定目录

@@ -74,6 +74,8 @@ build-all:
 		GOOS=linux GOARCH=arm64 go build -ldflags "$$LDFLAGS" -o dist/ask-linux-arm64 ./cmd/main.go; \
 		echo "构建 Windows AMD64..."; \
 		GOOS=windows GOARCH=amd64 go build -ldflags "$$LDFLAGS" -o dist/ask-windows-amd64.exe ./cmd/main.go; \
+		echo "构建 Windows 更新器 AMD64..."; \
+		GOOS=windows GOARCH=amd64 go build -ldflags "$$LDFLAGS" -o dist/ask_updater-windows-amd64.exe ./cmd/updater/main.go; \
 		echo "构建 macOS AMD64..."; \
 		GOOS=darwin GOARCH=amd64 go build -ldflags "$$LDFLAGS" -o dist/ask-darwin-amd64 ./cmd/main.go; \
 		echo "构建 macOS ARM64..."; \
