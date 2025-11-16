@@ -17,7 +17,7 @@ import (
 
 // 版本信息
 var (
-	Version   = "v0.1.0" // 默认版本，构建时会被替换
+	Version   = "v0.1.0"  // 默认版本，构建时会被替换
 	BuildDate = "unknown" // 构建日期，构建时会被替换
 	GitCommit = "unknown" // Git提交哈希，构建时会被替换
 )
@@ -41,7 +41,7 @@ func GetVersion() string {
 
 // GetVersionInfo 返回详细的版本信息
 func GetVersionInfo() string {
-	return fmt.Sprintf("Qwen-cli %s\n构建时间: %s\nGit提交: %s\nGo版本: %s\n系统: %s/%s", 
+	return fmt.Sprintf("Qwen-cli %s\n构建时间: %s\nGit提交: %s\nGo版本: %s\n系统: %s/%s",
 		Version, BuildDate, GitCommit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
@@ -140,7 +140,7 @@ func GetDownloadURL(release *ReleaseInfo) string {
 	// 查找匹配的资源文件
 	for _, asset := range release.Assets {
 		// 所有平台都优先查找直接的可执行文件
-		if strings.Contains(asset.Name, "ask_") && strings.Contains(asset.Name, "_" + osName + "_") {
+		if strings.Contains(asset.Name, "ask_") && strings.Contains(asset.Name, "_"+osName+"_") {
 			// Windows 检查 .exe 后缀，其他平台检查无后缀或对应后缀
 			if osName == "windows" {
 				if strings.HasSuffix(asset.Name, ".exe") {
@@ -246,26 +246,50 @@ func downloadAndInstallBinary(url, execPath string) error {
 	if runtime.GOOS == "windows" {
 		// 在Windows上，需要创建一个批处理文件来替换可执行文件
 		batchContent := fmt.Sprintf(`@echo off
+chcp 65001 >nul
 echo 正在更新 Qwen-cli...
-timeout /t 2 /nobreak >nul
+timeout /t 3 /nobreak >nul
+:retry
 move /Y "%s" "%s" >nul 2>&1
+if errorlevel 1 (
+	   echo 等待程序退出...
+	   timeout /t 2 /nobreak >nul
+	   goto retry
+)
 echo 更新完成！
+echo 请重新启动 Qwen-cli 以使用新版本
+timeout /t 3 /nobreak >nul
 del "%%~f0"
 `, tmpFile.Name(), execPath)
 
-		// 创建批处理文件
-		batchFile := execPath + ".update.bat"
+		// 获取用户临时目录，避免权限问题
+		userTempDir := os.Getenv("TEMP")
+		if userTempDir == "" {
+			userTempDir = os.Getenv("TMP")
+		}
+		if userTempDir == "" {
+			userTempDir = os.TempDir()
+		}
+
+		// 创建批处理文件在用户临时目录
+		batchFile := filepath.Join(userTempDir, "qwen-cli-update.bat")
 		err = os.WriteFile(batchFile, []byte(batchContent), 0644)
 		if err != nil {
 			return fmt.Errorf("创建更新脚本失败: %v", err)
 		}
 
-		// 启动批处理文件并退出当前程序
-		cmd := exec.Command("cmd", "/C", batchFile)
-		cmd.Start()
+		// 使用 start 命令最小化执行批处理，避免阻塞
+		cmd := exec.Command("cmd", "/C", "start", "/min", batchFile)
+		err = cmd.Start()
+		if err != nil {
+			return fmt.Errorf("启动更新脚本失败: %v", err)
+		}
 
 		fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
 		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
+
+		// 立即退出当前程序，释放文件锁定
+		os.Exit(0)
 	} else {
 		// 在Unix系统上，直接替换可执行文件
 		// 备份当前版本
@@ -328,17 +352,93 @@ func downloadAndInstallArchive(url, execPath string) error {
 		return fmt.Errorf("写入文件失败: %v", err)
 	}
 
-	// 在Windows上，如果下载的是压缩包，仍然需要手动处理
+	// 在Windows上，如果下载的是压缩包，也进行自动处理
 	if runtime.GOOS == "windows" {
-		fmt.Println("在Windows上更新需要手动替换文件...")
-		fmt.Printf("请手动下载并解压以下文件: %s\n", url)
-		fmt.Printf("然后将解压后的可执行文件替换当前程序: %s\n", execPath)
-		return nil
+		// 解压到临时目录
+		fmt.Println("📦 正在解压更新包...")
+
+		// 创建临时目录
+		tmpDir, err := os.MkdirTemp("", "qwen-cli-update-*")
+		if err != nil {
+			return fmt.Errorf("创建临时目录失败: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// 解压文件
+		err = extractTarGz(tmpFile.Name(), tmpDir)
+		if err != nil {
+			return fmt.Errorf("解压失败: %v", err)
+		}
+
+		// 查找解压后的可执行文件
+		var binaryPath string
+		files, err := os.ReadDir(tmpDir)
+		if err != nil {
+			return fmt.Errorf("读取解压目录失败: %v", err)
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".exe") {
+				binaryPath = filepath.Join(tmpDir, file.Name())
+				break
+			}
+		}
+
+		if binaryPath == "" {
+			return fmt.Errorf("在更新包中找不到可执行文件")
+		}
+
+		// 使用批处理脚本替换文件
+		batchContent := fmt.Sprintf(`@echo off
+chcp 65001 >nul
+echo 正在更新 Qwen-cli...
+timeout /t 3 /nobreak >nul
+:retry
+move /Y "%s" "%s" >nul 2>&1
+if errorlevel 1 (
+	   echo 等待程序退出...
+	   timeout /t 2 /nobreak >nul
+	   goto retry
+)
+echo 更新完成！
+echo 请重新启动 Qwen-cli 以使用新版本
+timeout /t 3 /nobreak >nul
+del "%%~f0"
+`, binaryPath, execPath)
+
+		// 获取用户临时目录，避免权限问题
+		userTempDir := os.Getenv("TEMP")
+		if userTempDir == "" {
+			userTempDir = os.Getenv("TMP")
+		}
+		if userTempDir == "" {
+			userTempDir = os.TempDir()
+		}
+
+		// 创建批处理文件在用户临时目录
+		batchFile := filepath.Join(userTempDir, "qwen-cli-update.bat")
+		err = os.WriteFile(batchFile, []byte(batchContent), 0644)
+		if err != nil {
+			return fmt.Errorf("创建更新脚本失败: %v", err)
+		}
+
+		// 使用 start 命令最小化执行批处理，避免阻塞
+		cmd := exec.Command("cmd", "/C", "start", "/min", batchFile)
+		err = cmd.Start()
+		if err != nil {
+			return fmt.Errorf("启动更新脚本失败: %v", err)
+		}
+
+		fmt.Println("✅ 更新程序已启动，将在几秒钟内完成...")
+		fmt.Println("🔄 请重新启动 Qwen-cli 以使用新版本")
+
+		// 立即退出当前程序，释放文件锁定
+		os.Exit(0)
 	}
 
 	// 在Unix系统上，自动解压并替换文件
 	fmt.Println("📦 正在解压更新包...")
-	
+
 	// 创建临时目录
 	tmpDir, err := os.MkdirTemp("", "qwen-cli-update-*")
 	if err != nil {
